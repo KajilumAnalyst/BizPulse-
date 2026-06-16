@@ -992,10 +992,6 @@ input:checked + .switch-slider::before { transform: translateX(18px); }
           <option value="TZ">🇹🇿 Tanzania</option>
           <option value="RW">🇷🇼 Rwanda</option>
           <option value="ZM">🇿🇲 Zambia</option>
-          <option value="IN">🇮🇳 India</option>
-          <option value="PK">🇵🇰 Pakistan</option>
-          <option value="BD">🇧🇩 Bangladesh</option>
-          <option value="PH">🇵🇭 Philippines</option>
         </select>
       </div>
       <div class="form-row">
@@ -1115,8 +1111,8 @@ input:checked + .switch-slider::before { transform: translateX(18px); }
       <div class="user-pill" onclick="switchSection('profile')">
         <div class="user-avatar" id="userAvatarSidebar">A</div>
         <div>
-          <div class="user-name" id="userNameSidebar">Adunola's Store</div>
-          <div class="user-plan" id="userPlanSidebar">Pro Plan</div>
+          <div class="user-name" id="userNameSidebar">Loading...</div>
+          <div class="user-plan" id="userPlanSidebar">Basic Plan</div>
         </div>
       </div>
       <button class="btn-ghost" style="width:100%;margin-top:8px;text-align:center;color:var(--danger);" onclick="doLogout()">Sign Out</button>
@@ -1158,88 +1154,292 @@ input:checked + .switch-slider::before { transform: translateX(18px); }
 
 <script>
 // ============================================================
+// CONFIGURATION
+// ============================================================
+const API_BASE = 'https://bizpulsebackend-production.up.railway.app/api/v1';
+
+// ============================================================
 // STATE
 // ============================================================
-const appState = {
+let appState = {
   currentUser: null,
-  currentPlan: 'pro', // basic | pro | business
+  currentPlan: 'basic',
   currentSection: 'dashboard',
-  currentStore: 'store1',
-  chatMessages: []
+  currentStore: null,
+  chatMessages: [],
+  dashboardStats: null,
+  products: [],
+  sales: [],
+  stores: []
 };
 
 // ============================================================
-// MOCK DATA
+// HELPER FUNCTIONS
 // ============================================================
-const mockProducts = [
-  { id: 1, name: 'Indomie Noodles (Carton)', sku: 'IND001', category: 'Food', qty: 5, price: 4500, supplier: 'Dufil Prima', status: 'Low Stock' },
-  { id: 2, name: 'Coca-Cola 1L (Crate)', sku: 'COC001', category: 'Beverages', qty: 3, price: 3200, supplier: 'NBC', status: 'Low Stock' },
-  { id: 3, name: "Bigi Chapman 50cl", sku: 'BIG001', category: 'Beverages', qty: 48, price: 800, supplier: 'Rite Foods', status: 'In Stock' },
-  { id: 4, name: 'Peak Milk (Tin)', sku: 'PKM001', category: 'Dairy', qty: 22, price: 2100, supplier: 'FrieslandCampina', status: 'In Stock' },
-  { id: 5, name: "Milo 500g", sku: 'MLO001', category: 'Beverages', qty: 18, price: 3800, supplier: 'Nestlé', status: 'In Stock' },
-  { id: 6, name: 'Golden Morn Cereal', sku: 'GLD001', category: 'Food', qty: 0, price: 2700, supplier: 'Nestlé', status: 'Out of Stock' },
-  { id: 7, name: 'Dettol Soap 75g', sku: 'DET001', category: 'Personal Care', qty: 60, price: 450, supplier: 'Reckitt', status: 'In Stock' },
-  { id: 8, name: 'Omo Detergent 500g', sku: 'OMO001', category: 'Household', qty: 35, price: 1200, supplier: 'Unilever', status: 'In Stock' },
-];
+function getAuthHeaders() {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+}
 
-const mockSales = [
-  { id: '#INV-001', date: '2025-01-15', customer: 'Emeka Okafor', items: 'Indomie x5, Coke x2', total: 29000, method: 'Cash', status: 'Paid' },
-  { id: '#INV-002', date: '2025-01-15', customer: 'Fatima Aliyu', items: 'Peak Milk x3, Milo x1', total: 10100, method: 'Transfer', status: 'Paid' },
-  { id: '#INV-003', date: '2025-01-14', customer: 'Chukwudi Eze', items: 'Omo x5, Dettol x10', total: 10500, method: 'POS', status: 'Paid' },
-  { id: '#INV-004', date: '2025-01-14', customer: 'Ngozi Adeyemi', items: 'Bigi Chapman x24', total: 19200, method: 'Transfer', status: 'Paid' },
-  { id: '#INV-005', date: '2025-01-13', customer: 'Ibrahim Musa', items: 'Golden Morn x2', total: 5400, method: 'Cash', status: 'Pending' },
-  { id: '#INV-006', date: '2025-01-13', customer: 'Amara Obi', items: 'Coca-Cola x3', total: 9600, method: 'Cash', status: 'Paid' },
-];
+function showToast(msg, duration = 3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
 
-const mockStores = [
-  { id: 'store1', name: 'Main Branch — Yaba', type: 'Retail', revenue: '₦842,000', items: 145, status: 'Active' },
-  { id: 'store2', name: 'Ikeja Branch', type: 'Retail', revenue: '₦526,500', items: 98, status: 'Active' },
-  { id: 'store3', name: 'Surulere Outlet', type: 'Food & Bev', revenue: '₦218,200', items: 62, status: 'Active' },
-];
-
-const countryData = {
-  NG: { currency: '₦', name: 'Nigeria', prefix: '+234', payMethods: ['Bank Transfer', 'POS', 'Cash', 'USSD', 'OPay', 'Kuda'] },
-  GH: { currency: 'GH₵', name: 'Ghana', prefix: '+233', payMethods: ['Mobile Money', 'Bank Transfer', 'Cash', 'MTN MoMo'] },
-  KE: { currency: 'KSh', name: 'Kenya', prefix: '+254', payMethods: ['M-Pesa', 'Bank Transfer', 'Cash', 'Airtel Money'] },
-  ZA: { currency: 'R', name: 'South Africa', prefix: '+27', payMethods: ['Bank Transfer', 'SnapScan', 'Cash', 'EFT'] },
-  IN: { currency: '₹', name: 'India', prefix: '+91', payMethods: ['UPI', 'Bank Transfer', 'Cash', 'Paytm'] },
-  PH: { currency: '₱', name: 'Philippines', prefix: '+63', payMethods: ['GCash', 'Bank Transfer', 'Cash', 'Maya'] },
-};
-
-const planDetails = {
-  basic: {
-    name: 'Basic Plan',
-    price: 'Free',
-    rawPrice: 0,
-    trial: false,
-    features: ['Limited Sales Tracking (100/month)', 'Inventory up to 50 products', 'Monthly Reports', 'Ads enabled', 'No AI Insights']
-  },
-  pro: {
-    name: 'Pro Plan',
-    price: '₦2,500/month',
-    rawPrice: 2500,
-    trial: true,
-    features: ['Unlimited Sales Tracking', 'Inventory up to 500 products', 'All Report Types', 'AI Insights (Limited)', 'WhatsApp Invoices', 'No Ads']
-  },
-  business: {
-    name: 'Business Plan',
-    price: '₦5,000/month',
-    rawPrice: 5000,
-    trial: true,
-    features: ['Everything in Pro', 'Unlimited Products', 'Full AI Insights', 'Multi-Store Support', 'Voice Entry', 'Priority Support', 'No Ads']
+async function apiRequest(endpoint, method = 'GET', body = null) {
+  const options = {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : {}
+  };
+  
+  if (body) {
+    options.body = JSON.stringify(body);
   }
-};
-
-const aiResponses = {
-  'restock': `📦 **Inventory Alert — Immediate Action Needed**\n\nBased on current stock levels and your average daily sales:\n\n• **Indomie Noodles** — 5 units left (7 days supply). Recommend: Order 100 cartons\n• **Coca-Cola 1L** — 3 units left (3 days supply). Recommend: Order 50 crates\n• **Golden Morn Cereal** — Out of stock! Recommend: Order 30 tins\n\nProjected stockout revenue loss if unaddressed: **₦47,200**`,
-  'top seller': `🏆 **Top Selling Products — Last 30 Days**\n\n1. Indomie Noodles — 234 units — ₦234,000 revenue\n2. Coca-Cola 1L — 187 units — ₦179,520 revenue\n3. Bigi Chapman — 152 units — ₦60,800 revenue\n4. Peak Milk — 98 units — ₦98,000 revenue\n5. Milo 500g — 76 units — ₦144,400 revenue\n\n📌 **Insight:** Indomie drives 23% of your total revenue. Consider bulk discounts with your supplier.`,
-  'weekly': `📊 **Weekly Business Summary — Jan 8–14, 2025**\n\n💰 Total Revenue: **₦842,500**\n📦 Units Sold: **1,247 units**\n🛒 Transactions: **183 sales**\n📈 Growth vs last week: **+12.4%**\n\n**Highlights:**\n• Best day: Wednesday (₦189,000)\n• Best category: Beverages (41% of sales)\n• New customers: 28\n\n⚠️ **Alert:** Sales dropped 18% on Sunday. Consider running weekend promos.`,
-  'predict': `🔮 **Inventory Shortage Prediction — Next 14 Days**\n\nBased on your sales velocity:\n\n🔴 **Critical (within 3 days):**\n• Coca-Cola 1L — Stockout in 3 days\n\n🟡 **Warning (within 7 days):**\n• Indomie Noodles — Stockout in 5 days\n• Golden Morn — Already out of stock\n\n🟢 **Safe (14+ days):**\n• Bigi Chapman, Peak Milk, Milo, Dettol, Omo\n\n💡 Recommendation: Place orders within 48 hours to avoid lost sales.`,
-  'drop': `📉 **Sales Drop Analysis**\n\nYour sales dropped approximately 18% last Tuesday. Here are the likely causes:\n\n1. **Weather** — Heavy rainfall recorded that day may have reduced foot traffic\n2. **Competitor Activity** — A new store opened nearby on Monday\n3. **Stock Issue** — Indomie was temporarily out of stock for 4 hours\n\n✅ **Recommended Actions:**\n• Maintain buffer stock of top 5 products\n• Offer delivery service on rainy days\n• Monitor competitor pricing weekly\n\nEstimated recoverable revenue: **₦32,000/month**`
-};
+  
+  // Add auth token if we have one (and it's not an auth endpoint)
+  const token = localStorage.getItem('token');
+  if (token && !endpoint.includes('/auth/')) {
+    options.headers = options.headers || {};
+    options.headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE}${endpoint}`, options);
+  
+  if (res.status === 401) {
+    // Token expired or invalid
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    showToast('Session expired. Please login again.');
+    showPage('page-login');
+    return null;
+  }
+  
+  if (res.status === 204) {
+    return { success: true };
+  }
+  
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || data.message || 'Request failed');
+  }
+  return data;
+}
 
 // ============================================================
-// ROUTING
+// AUTH FUNCTIONS
+// ============================================================
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value;
+  const pass = document.getElementById('loginPassword').value;
+  const err = document.getElementById('loginError');
+  
+  if (!email || !pass) {
+    err.textContent = 'Please fill in all fields.';
+    err.style.display = 'block';
+    return;
+  }
+  
+  try {
+    err.style.display = 'none';
+    const data = await apiRequest('/auth/login', 'POST', { email, password: pass });
+    
+    if (!data) return;
+    
+    localStorage.setItem('token', data.access_token);
+    appState.currentUser = {
+      id: data.user_id,
+      business_name: data.business_name,
+      plan: data.plan
+    };
+    appState.currentPlan = data.plan;
+    
+    await loadUserProfile();
+    await loadDashboardStats();
+    await loadProducts();
+    await loadSales();
+    await loadStores();
+    
+    enterDashboard();
+  } catch (e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  }
+}
+
+async function doRegister() {
+  const bizName = document.getElementById('regBizName').value;
+  const bizType = document.getElementById('regBizType').value;
+  const country = document.getElementById('regCountry').value;
+  const email = document.getElementById('regEmail').value;
+  const phone = document.getElementById('regPhone').value;
+  const pass = document.getElementById('regPassword').value;
+  const confirm = document.getElementById('regConfirm').value;
+  const plan = document.getElementById('regPlan').value;
+  const terms = document.getElementById('regTerms').checked;
+  const err = document.getElementById('regError');
+
+  if (!bizName || !email || !pass || !plan) {
+    err.textContent = 'Please fill in all required fields.';
+    err.style.display = 'block';
+    return;
+  }
+  if (pass !== confirm) {
+    err.textContent = 'Passwords do not match.';
+    err.style.display = 'block';
+    return;
+  }
+  if (pass.length < 8) {
+    err.textContent = 'Password must be at least 8 characters.';
+    err.style.display = 'block';
+    return;
+  }
+  if (!terms) {
+    err.textContent = 'You must agree to the Terms and Conditions.';
+    err.style.display = 'block';
+    return;
+  }
+  if (!bizType) {
+    err.textContent = 'Please select your business type.';
+    err.style.display = 'block';
+    return;
+  }
+  if (!country) {
+    err.textContent = 'Please select your country.';
+    err.style.display = 'block';
+    return;
+  }
+
+  try {
+    err.style.display = 'none';
+    const data = await apiRequest('/auth/register', 'POST', {
+      email,
+      password: pass,
+      business_name: bizName,
+      business_type: bizType,
+      country,
+      phone,
+      plan
+    });
+    
+    if (!data) return;
+    
+    localStorage.setItem('token', data.access_token);
+    appState.currentUser = {
+      id: data.user_id,
+      business_name: data.business_name,
+      plan: data.plan
+    };
+    appState.currentPlan = data.plan;
+    
+    await loadUserProfile();
+    await loadDashboardStats();
+    await loadProducts();
+    await loadSales();
+    await loadStores();
+    
+    enterDashboard();
+  } catch (e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  }
+}
+
+async function loadUserProfile() {
+  try {
+    const user = await apiRequest('/auth/me');
+    if (user) {
+      appState.currentUser = user;
+      appState.currentPlan = user.plan;
+      updateUserUI();
+    }
+  } catch (e) {
+    console.error('Failed to load profile:', e);
+  }
+}
+
+function doForgot() {
+  const email = document.getElementById('forgotEmail').value;
+  if (!email || !email.includes('@')) {
+    showToast('⚠️ Please enter a valid email address.');
+    return;
+  }
+  document.getElementById('forgotForm').style.display = 'none';
+  document.getElementById('forgotSuccess').style.display = 'block';
+}
+
+function doLogout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  document.getElementById('app-shell').style.display = 'none';
+  appState = {
+    currentUser: null,
+    currentPlan: 'basic',
+    currentSection: 'dashboard',
+    currentStore: null,
+    chatMessages: [],
+    dashboardStats: null,
+    products: [],
+    sales: [],
+    stores: []
+  };
+  showPage('page-landing');
+}
+
+// ============================================================
+// DATA LOADING FUNCTIONS
+// ============================================================
+async function loadDashboardStats() {
+  try {
+    const stats = await apiRequest('/sales/dashboard');
+    if (stats) {
+      appState.dashboardStats = stats;
+    }
+  } catch (e) {
+    console.error('Failed to load dashboard stats:', e);
+  }
+}
+
+async function loadProducts() {
+  try {
+    const products = await apiRequest('/inventory/');
+    if (products) {
+      appState.products = products;
+    }
+  } catch (e) {
+    console.error('Failed to load products:', e);
+  }
+}
+
+async function loadSales() {
+  try {
+    const sales = await apiRequest('/sales/');
+    if (sales) {
+      appState.sales = sales;
+    }
+  } catch (e) {
+    console.error('Failed to load sales:', e);
+  }
+}
+
+async function loadStores() {
+  try {
+    const stores = await apiRequest('/stores/');
+    if (stores && stores.length) {
+      appState.stores = stores;
+      appState.currentStore = stores[0].id;
+    }
+  } catch (e) {
+    console.error('Failed to load stores:', e);
+  }
+}
+
+// ============================================================
+// ROUTING & UI
 // ============================================================
 function showPage(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1250,35 +1450,39 @@ function showPage(pageId) {
 function enterDashboard() {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('app-shell').style.display = 'flex';
-  appState.currentUser = { name: "Adunola's Store", initials: 'A', plan: appState.currentPlan };
   updateUserUI();
   switchSection('dashboard');
-  // Show mobile menu toggle on mobile
   if (window.innerWidth <= 768) {
     document.getElementById('menuToggle').style.display = 'flex';
   }
 }
 
-function doLogout() {
-  document.getElementById('app-shell').style.display = 'none';
-  showPage('page-landing');
+function updateUserUI() {
+  const name = appState.currentUser?.business_name || 'My Business';
+  const initials = name.charAt(0).toUpperCase();
+  const planLabel = { basic: 'Basic Plan', pro: 'Pro Plan', business: 'Business Plan' };
+  
+  document.getElementById('userAvatarSidebar').textContent = initials;
+  document.getElementById('userAvatarTop').textContent = initials;
+  document.getElementById('userNameSidebar').textContent = name;
+  document.getElementById('userPlanSidebar').textContent = planLabel[appState.currentPlan] || 'Basic Plan';
 }
 
 function switchSection(section) {
   appState.currentSection = section;
-  // Update sidebar active state
+  
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.remove('active');
     if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(`'${section}'`)) {
       el.classList.add('active');
     }
   });
-  // Update topbar title
+  
   const titles = { dashboard: 'Dashboard', sales: 'Sales Tracking', inventory: 'Inventory', analytics: 'Analytics', reports: 'Reports', ai: 'AI Insights', invoice: 'WhatsApp Invoice', stores: 'Multi-Store', subscription: 'Subscription', profile: 'Profile', settings: 'Settings' };
   document.getElementById('topbarTitle').textContent = titles[section] || section;
-  // Render section
+  
   renderSection(section);
-  // Close mobile sidebar
+  
   if (window.innerWidth <= 768) {
     document.getElementById('sidebar').classList.remove('open');
   }
@@ -1294,68 +1498,31 @@ function setActivebn(section) {
   if (el) el.classList.add('active');
 }
 
-// ============================================================
-// AUTH FUNCTIONS
-// ============================================================
-function doLogin() {
-  const email = document.getElementById('loginEmail').value;
-  const pass = document.getElementById('loginPassword').value;
-  const err = document.getElementById('loginError');
-  if (!email || !pass) {
-    err.textContent = 'Please fill in all fields.';
-    err.style.display = 'block';
-    return;
-  }
-  if (!email.includes('@')) {
-    err.textContent = 'Please enter a valid email address.';
-    err.style.display = 'block';
-    return;
-  }
-  err.style.display = 'none';
-  enterDashboard();
-}
-
-function doForgot() {
-  const email = document.getElementById('forgotEmail').value;
-  if (!email || !email.includes('@')) {
-    showToast('⚠️ Please enter a valid email address.');
-    return;
-  }
-  document.getElementById('forgotForm').style.display = 'none';
-  document.getElementById('forgotSuccess').style.display = 'block';
-}
-
-function doRegister() {
-  const bizName = document.getElementById('regBizName').value;
-  const email = document.getElementById('regEmail').value;
-  const pass = document.getElementById('regPassword').value;
-  const confirm = document.getElementById('regConfirm').value;
-  const plan = document.getElementById('regPlan').value;
-  const terms = document.getElementById('regTerms').checked;
-  const err = document.getElementById('regError');
-
-  if (!bizName || !email || !pass || !plan) { err.textContent = 'Please fill in all required fields.'; err.style.display = 'block'; return; }
-  if (pass !== confirm) { err.textContent = 'Passwords do not match.'; err.style.display = 'block'; return; }
-  if (pass.length < 8) { err.textContent = 'Password must be at least 8 characters.'; err.style.display = 'block'; return; }
-  if (!terms) { err.textContent = 'You must agree to the Terms and Conditions.'; err.style.display = 'block'; return; }
-
-  err.style.display = 'none';
-  appState.currentPlan = plan;
-  enterDashboard();
-}
-
 function updatePlanInfo() {
   const planId = document.getElementById('regPlan').value;
   const planBox = document.getElementById('planInfoBox');
   const payBox = document.getElementById('paymentBox');
-  if (!planId) { planBox.innerHTML = ''; payBox.innerHTML = ''; return; }
+  
+  const planDetails = {
+    basic: { name: 'Basic Plan', price: 'Free', features: ['Limited Sales Tracking (100/month)', 'Inventory up to 50 products', 'Monthly Reports', 'Ads enabled', 'No AI Insights'] },
+    pro: { name: 'Pro Plan', price: '₦2,500/month', features: ['Unlimited Sales Tracking', 'Inventory up to 500 products', 'All Report Types', 'AI Insights (Limited)', 'WhatsApp Invoices', 'No Ads'] },
+    business: { name: 'Business Plan', price: '₦5,000/month', features: ['Everything in Pro', 'Unlimited Products', 'Full AI Insights', 'Multi-Store Support', 'Voice Entry', 'Priority Support', 'No Ads'] }
+  };
+  
+  if (!planId || !planDetails[planId]) {
+    planBox.innerHTML = '';
+    payBox.innerHTML = '';
+    return;
+  }
+  
   const plan = planDetails[planId];
   planBox.innerHTML = `<div class="plan-info-box">
     <div class="plan-name">${plan.name}</div>
     <div class="plan-price">${plan.price}</div>
     <div class="plan-feats">${plan.features.map(f => `<div>✓ ${f}</div>`).join('')}</div>
   </div>`;
-  if (plan.trial) {
+  
+  if (planId !== 'basic') {
     payBox.innerHTML = `<div class="payment-section">
       <div class="section-head">💳 Card Authorization</div>
       <div class="trial-notice">⚠️ Your card will only be charged after the 14-day free trial unless cancelled.</div>
@@ -1373,74 +1540,42 @@ function updatePlanInfo() {
 }
 
 // ============================================================
-// USER UI
-// ============================================================
-function updateUserUI() {
-  const u = appState.currentUser;
-  if (!u) return;
-  document.getElementById('userAvatarSidebar').textContent = u.initials;
-  document.getElementById('userAvatarTop').textContent = u.initials;
-  document.getElementById('userNameSidebar').textContent = u.name;
-  const planLabel = { basic: 'Basic Plan (Free)', pro: 'Pro Plan', business: 'Business Plan' };
-  document.getElementById('userPlanSidebar').textContent = planLabel[u.plan] || 'Pro Plan';
-}
-
-// ============================================================
-// TOAST
-// ============================================================
-function showToast(msg, duration = 3000) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
-}
-
-// ============================================================
 // MODAL
 // ============================================================
 function openModal(html, title, sub) {
   document.getElementById('modalContent').innerHTML = `<div class="modal-title">${title}</div><div class="modal-sub">${sub}</div>${html}`;
   document.getElementById('modalOverlay').classList.add('open');
 }
+
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
 }
+
 document.getElementById('modalOverlay').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
 // ============================================================
-// SECTION RENDERER
-// ============================================================
-function renderSection(section) {
-  const area = document.getElementById('contentArea');
-  // AD BANNER for basic plan
-  const adHtml = appState.currentPlan === 'basic' && !['subscription'].includes(section) ? `<div class="ad-banner"><div><div class="ad-label">Advertisement</div><div class="ad-text"><strong>QuickBooks for Africa</strong> — Simplify your accounting today</div></div><button class="ad-cta" onclick="showToast('Opening ad...')">Learn More</button></div>` : '';
-
-  switch (section) {
-    case 'dashboard': area.innerHTML = adHtml + renderDashboard(); initCharts(); break;
-    case 'sales': area.innerHTML = adHtml + renderSales(); break;
-    case 'inventory': area.innerHTML = adHtml + renderInventory(); break;
-    case 'analytics': area.innerHTML = adHtml + renderAnalytics(); initAnalyticsCharts(); break;
-    case 'reports': area.innerHTML = renderReports(); break;
-    case 'ai': area.innerHTML = renderAI(); break;
-    case 'invoice': area.innerHTML = adHtml + renderInvoice(); break;
-    case 'stores': area.innerHTML = adHtml + renderStores(); break;
-    case 'subscription': area.innerHTML = renderSubscription(); break;
-    case 'profile': area.innerHTML = adHtml + renderProfile(); break;
-    case 'settings': area.innerHTML = adHtml + renderSettings(); break;
-    default: area.innerHTML = '<p>Section not found.</p>';
-  }
-}
-
-// ============================================================
-// DASHBOARD
+// DASHBOARD RENDER
 // ============================================================
 function renderDashboard() {
+  const stats = appState.dashboardStats || {
+    today_revenue: 0,
+    today_transactions: 0,
+    weekly_revenue: 0,
+    monthly_revenue: 0,
+    total_products: 0,
+    low_stock_count: 0,
+    out_of_stock_count: 0
+  };
+  
+  const recentSales = appState.sales.slice(0, 5);
+  const lowStockProducts = appState.products.filter(p => p.quantity <= (p.low_stock_threshold || 10) && p.quantity > 0).slice(0, 4);
+  
   return `
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
     <div>
-      <h2 style="font-size:22px;font-weight:700;margin-bottom:4px;">Good morning, Adunola 👋</h2>
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:4px;">Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${appState.currentUser?.business_name || 'there'} 👋</h2>
       <p style="color:var(--text-secondary);font-size:14px;">Here's what's happening with your business today.</p>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -1452,23 +1587,21 @@ function renderDashboard() {
   <div class="stats-grid">
     <div class="stat-card stat-accent">
       <div class="stat-label">Today's Sales</div>
-      <div class="stat-value">₦84,200</div>
-      <div class="stat-change text-success-custom">▲ 14.2% vs yesterday</div>
-    </div>
-    <div class="stat-card stat-success">
-      <div class="stat-label">Today's Profit</div>
-      <div class="stat-value">₦21,400</div>
-      <div class="stat-change text-success-custom">▲ 8.7% vs yesterday</div>
+      <div class="stat-value">₦${(stats.today_revenue || 0).toLocaleString()}</div>
+      <div class="stat-change text-success-custom">${stats.today_transactions || 0} transactions</div>
     </div>
     <div class="stat-card stat-warning">
       <div class="stat-label">Weekly Revenue</div>
-      <div class="stat-value">₦542,800</div>
-      <div class="stat-change text-success-custom">▲ 12.4% vs last week</div>
+      <div class="stat-value">₦${(stats.weekly_revenue || 0).toLocaleString()}</div>
     </div>
     <div class="stat-card stat-info">
-      <div class="stat-label">Inventory Value</div>
-      <div class="stat-value">₦1.24M</div>
-      <div class="stat-change text-danger-custom">▼ 3 low stock items</div>
+      <div class="stat-label">Monthly Revenue</div>
+      <div class="stat-value">₦${(stats.monthly_revenue || 0).toLocaleString()}</div>
+    </div>
+    <div class="stat-card ${stats.low_stock_count > 0 ? 'stat-success' : 'stat-info'}">
+      <div class="stat-label">Inventory Health</div>
+      <div class="stat-value">${stats.total_products || 0}</div>
+      <div class="stat-change ${stats.low_stock_count > 0 ? 'text-warning-custom' : 'text-success-custom'}">${stats.low_stock_count || 0} low stock</div>
     </div>
   </div>
 
@@ -1476,8 +1609,7 @@ function renderDashboard() {
     <div>
       <div class="chart-card" style="margin-bottom:20px;">
         <div class="chart-head">
-          <div class="chart-title">Revenue — Last 7 Days</div>
-          <span class="badge badge-success">▲ 12.4%</span>
+          <div class="chart-title">Revenue Overview</div>
         </div>
         <div class="chart-wrap"><canvas id="revenueChart"></canvas></div>
       </div>
@@ -1488,15 +1620,16 @@ function renderDashboard() {
         </div>
         <div class="table-container">
           <table>
-            <thead><tr><th>Invoice</th><th>Customer</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Customer</th><th>Total</th><th>Method</th><th>Status</th></tr></thead>
             <tbody>
-              ${mockSales.slice(0, 5).map(s => `<tr>
-                <td><strong>${s.id}</strong></td>
-                <td>${s.customer}</td>
-                <td><strong>₦${s.total.toLocaleString()}</strong></td>
-                <td><span class="badge badge-info">${s.method}</span></td>
-                <td><span class="badge ${s.status === 'Paid' ? 'badge-success' : 'badge-warning'}">${s.status}</span></td>
+              ${recentSales.map(s => `<tr>
+                <td><strong>${s.invoice_number || '#' + s.id}</strong></td>
+                <td>${s.customer_name || 'Walk-in'}</td>
+                <td><strong>₦${(s.total || 0).toLocaleString()}</strong></td>
+                <td><span class="badge badge-info">${s.payment_method || 'Cash'}</span></td>
+                <td><span class="badge badge-success">Paid</span></td>
               </tr>`).join('')}
+              ${recentSales.length === 0 ? '<tr><td colspan="5" style="text-align:center;">No sales yet. Click "Record Sale" to get started.</td></tr>' : ''}
             </tbody>
           </table>
         </div>
@@ -1505,23 +1638,19 @@ function renderDashboard() {
     <div>
       <div class="card" style="margin-bottom:16px;padding:20px;">
         <div style="font-weight:700;font-size:15px;margin-bottom:16px;">⚠️ Low Stock Alerts</div>
-        ${mockProducts.filter(p => p.status !== 'In Stock').map(p => `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
-          <div><div style="font-size:13px;font-weight:600;">${p.name}</div><div style="font-size:11px;color:var(--text-muted);">${p.sku}</div></div>
-          <span class="badge ${p.status === 'Out of Stock' ? 'badge-danger' : 'badge-warning'}">${p.qty} left</span>
+        ${lowStockProducts.map(p => `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div><div style="font-size:13px;font-weight:600;">${p.name}</div><div style="font-size:11px;color:var(--text-muted);">${p.sku || 'N/A'}</div></div>
+          <span class="badge badge-warning">${p.quantity} left</span>
         </div>`).join('')}
+        ${lowStockProducts.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-muted);">✨ All stock levels are healthy!</div>' : ''}
         <button class="btn-accent" style="width:100%;justify-content:center;margin-top:14px;padding:10px;" onclick="switchSection('inventory')">Manage Inventory</button>
       </div>
       <div class="card" style="padding:20px;">
-        <div style="font-weight:700;font-size:15px;margin-bottom:16px;">🏆 Top Products</div>
-        ${[
-          { name: 'Indomie Noodles', sales: '₦234,000', pct: 82 },
-          { name: 'Coca-Cola 1L', sales: '₦179,520', pct: 62 },
-          { name: 'Bigi Chapman', sales: '₦60,800', pct: 21 },
-          { name: 'Peak Milk', sales: '₦98,000', pct: 34 },
-        ].map(p => `<div style="margin-bottom:14px;">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span style="font-weight:600;">${p.name}</span><span style="color:var(--text-secondary);">${p.sales}</span></div>
-          <div style="height:4px;background:var(--border);border-radius:10px;"><div style="height:100%;width:${p.pct}%;background:var(--accent);border-radius:10px;"></div></div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:16px;">🏆 Store Performance</div>
+        ${appState.stores.slice(0, 3).map(s => `<div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span style="font-weight:600;">${s.name}</span><span style="color:var(--text-secondary);">Active</span></div>
         </div>`).join('')}
+        ${appState.stores.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-muted);">No stores configured yet.</div>' : ''}
       </div>
     </div>
   </div>`;
@@ -1537,7 +1666,7 @@ function initCharts() {
         labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         datasets: [{
           label: 'Revenue',
-          data: [52000, 48000, 189000, 75000, 91000, 142000, 84200],
+          data: [52000, 48000, 189000, 75000, 91000, 142000, appState.dashboardStats?.today_revenue || 84200],
           borderColor: '#ff5b1f',
           backgroundColor: 'rgba(255,91,31,0.08)',
           fill: true,
@@ -1561,9 +1690,22 @@ function initCharts() {
 }
 
 // ============================================================
-// SALES
+// SALES RENDER
 // ============================================================
 function renderSales() {
+  const sales = appState.sales;
+  const totalToday = sales.filter(s => {
+    const today = new Date().toDateString();
+    const saleDate = new Date(s.created_at).toDateString();
+    return saleDate === today;
+  }).reduce((sum, s) => sum + (s.total || 0), 0);
+  
+  const totalWeek = sales.filter(s => {
+    const now = new Date();
+    const weekAgo = new Date(now.setDate(now.getDate() - 7));
+    return new Date(s.created_at) >= weekAgo;
+  }).reduce((sum, s) => sum + (s.total || 0), 0);
+  
   return `
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
     <div>
@@ -1574,368 +1716,250 @@ function renderSales() {
   </div>
 
   <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
-    <div class="stat-card"><div class="stat-label">Today</div><div class="stat-value">₦84,200</div><div class="stat-change text-success-custom">▲ 14%</div></div>
-    <div class="stat-card"><div class="stat-label">This Week</div><div class="stat-value">₦542,800</div><div class="stat-change text-success-custom">▲ 12%</div></div>
-    <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">₦2.1M</div><div class="stat-change text-success-custom">▲ 7.8%</div></div>
+    <div class="stat-card"><div class="stat-label">Today</div><div class="stat-value">₦${totalToday.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">This Week</div><div class="stat-value">₦${totalWeek.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Sales</div><div class="stat-value">${sales.length}</div></div>
   </div>
 
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-      <div style="font-weight:700;font-size:15px;">Sales History</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <input class="input-field" style="width:220px;" placeholder="🔍 Search transactions..." oninput="filterSales(this.value)">
-        <select class="input-field" style="width:150px;" onchange="filterSalesByMethod(this.value)">
-          <option value="">All Methods</option>
-          <option>Cash</option><option>Transfer</option><option>POS</option>
-        </select>
-      </div>
-    </div>
-    <div class="table-container" id="salesTable">
-      ${renderSalesTable(mockSales)}
-    </div>
-  </div>`;
-}
-
-function renderSalesTable(sales) {
-  return `<table>
-    <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Method</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>
-      ${sales.map(s => `<tr>
-        <td><strong>${s.id}</strong></td>
-        <td style="color:var(--text-muted);font-size:12px;">${s.date}</td>
-        <td>${s.customer}</td>
-        <td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.items}</td>
-        <td><strong>₦${s.total.toLocaleString()}</strong></td>
-        <td><span class="badge badge-info">${s.method}</span></td>
-        <td><span class="badge ${s.status === 'Paid' ? 'badge-success' : 'badge-warning'}">${s.status}</span></td>
-        <td><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="switchSection('invoice')">Invoice</button></td>
-      </tr>`).join('')}
-    </tbody>
-  </table>`;
-}
-
-function filterSales(q) {
-  const filtered = mockSales.filter(s => s.customer.toLowerCase().includes(q.toLowerCase()) || s.id.toLowerCase().includes(q.toLowerCase()) || s.items.toLowerCase().includes(q.toLowerCase()));
-  document.getElementById('salesTable').innerHTML = renderSalesTable(filtered);
-}
-
-function filterSalesByMethod(method) {
-  const filtered = method ? mockSales.filter(s => s.method === method) : mockSales;
-  document.getElementById('salesTable').innerHTML = renderSalesTable(filtered);
-}
-
-function openSaleModal() {
-  openModal(`
-    <div class="form-row">
-      <div class="form-group"><label class="label">Product</label>
-        <select class="input-field"><option value="">Select product</option>${mockProducts.map(p => `<option>${p.name}</option>`).join('')}</select>
-      </div>
-      <div class="form-group"><label class="label">Quantity</label><input class="input-field" type="number" min="1" value="1"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Unit Price (₦)</label><input class="input-field" type="number" placeholder="0.00"></div>
-      <div class="form-group"><label class="label">Discount (%)</label><input class="input-field" type="number" min="0" max="100" value="0"></div>
-    </div>
-    <div class="form-group"><label class="label">Customer Name (Optional)</label><input class="input-field" placeholder="Walk-in Customer"></div>
-    <div class="form-group"><label class="label">Payment Method</label>
-      <select class="input-field"><option>Cash</option><option>Bank Transfer</option><option>POS</option><option>USSD</option></select>
-    </div>
-    <div style="display:flex;gap:12px;margin-top:20px;">
-      <button class="btn-accent" style="flex:1;justify-content:center;" onclick="saveSale()">Record Sale</button>
-      <button class="btn-outline" style="flex:1;justify-content:center;" onclick="closeModal()">Cancel</button>
-    </div>`, 'Record New Sale', 'Add a new transaction to your records');
-}
-
-function saveSale() {
-  closeModal();
-  showToast('✅ Sale recorded successfully!');
-}
-
-// ============================================================
-// INVENTORY
-// ============================================================
-function renderInventory() {
-  return `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-    <div>
-      <h2 style="font-size:20px;font-weight:700;">Inventory Management</h2>
-      <p style="color:var(--text-secondary);font-size:13px;">${mockProducts.length} products · 3 need attention</p>
-    </div>
-    <button class="btn-accent" onclick="openAddProductModal()">+ Add Product</button>
-  </div>
-
-  <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
-    <div class="stat-card"><div class="stat-label">Total Products</div><div class="stat-value">${mockProducts.length}</div></div>
-    <div class="stat-card"><div class="stat-label">In Stock</div><div class="stat-value" style="color:var(--success);">5</div></div>
-    <div class="stat-card"><div class="stat-label">Low Stock</div><div class="stat-value" style="color:var(--warning);">2</div></div>
-    <div class="stat-card"><div class="stat-label">Out of Stock</div><div class="stat-value" style="color:var(--danger);">1</div></div>
-  </div>
-
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-      <div class="toggle-tabs" style="margin:0;">
-        <button class="toggle-tab active" onclick="filterByCategory('all',this)">All</button>
-        <button class="toggle-tab" onclick="filterByCategory('Food',this)">Food</button>
-        <button class="toggle-tab" onclick="filterByCategory('Beverages',this)">Beverages</button>
-        <button class="toggle-tab" onclick="filterByCategory('other',this)">Other</button>
-      </div>
-      <input class="input-field" style="width:220px;" placeholder="🔍 Search products..." oninput="filterProducts(this.value)">
-    </div>
-    <div class="table-container" id="inventoryTable">
-      ${renderProductTable(mockProducts)}
-    </div>
-  </div>`;
-}
-
-function renderProductTable(products) {
-  return `<table>
-    <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Qty</th><th>Price</th><th>Supplier</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>
-      ${products.map(p => `<tr>
-        <td><strong>${p.name}</strong></td>
-        <td style="font-size:12px;color:var(--text-muted);">${p.sku}</td>
-        <td>${p.category}</td>
-        <td><strong>${p.qty}</strong></td>
-        <td>₦${p.price.toLocaleString()}</td>
-        <td style="font-size:12px;">${p.supplier}</td>
-        <td><span class="badge ${p.status === 'In Stock' ? 'badge-success' : p.status === 'Low Stock' ? 'badge-warning' : 'badge-danger'}">${p.status}</span></td>
-        <td style="display:flex;gap:6px;">
-          <button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="openEditProductModal(${p.id})">Edit</button>
-          <button class="btn-ghost" style="padding:4px 10px;font-size:12px;color:var(--danger);" onclick="deleteProduct(${p.id})">Delete</button>
-        </td>
-      </tr>`).join('')}
-    </tbody>
-  </table>`;
-}
-
-function filterProducts(q) {
-  const f = mockProducts.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || p.sku.toLowerCase().includes(q.toLowerCase()));
-  document.getElementById('inventoryTable').innerHTML = renderProductTable(f);
-}
-
-function filterByCategory(cat, el) {
-  document.querySelectorAll('.toggle-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  const f = cat === 'all' ? mockProducts : cat === 'other' ? mockProducts.filter(p => !['Food','Beverages'].includes(p.category)) : mockProducts.filter(p => p.category === cat);
-  document.getElementById('inventoryTable').innerHTML = renderProductTable(f);
-}
-
-function openAddProductModal() {
-  openModal(`
-    <div class="form-row">
-      <div class="form-group"><label class="label">Product Name</label><input class="input-field" placeholder="e.g. Indomie Noodles"></div>
-      <div class="form-group"><label class="label">SKU</label><input class="input-field" placeholder="e.g. IND001"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Category</label>
-        <select class="input-field"><option>Food</option><option>Beverages</option><option>Dairy</option><option>Personal Care</option><option>Household</option></select>
-      </div>
-      <div class="form-group"><label class="label">Quantity</label><input class="input-field" type="number" min="0" value="0"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Selling Price (₦)</label><input class="input-field" type="number" placeholder="0.00"></div>
-      <div class="form-group"><label class="label">Cost Price (₦)</label><input class="input-field" type="number" placeholder="0.00"></div>
-    </div>
-    <div class="form-group"><label class="label">Supplier</label><input class="input-field" placeholder="Supplier name"></div>
-    <button class="btn-accent" style="width:100%;justify-content:center;margin-top:16px;" onclick="closeModal();showToast('✅ Product added successfully!')">Add Product</button>`,
-    'Add New Product', 'Add a product to your inventory');
-}
-
-function openEditProductModal(id) {
-  const p = mockProducts.find(x => x.id === id);
-  if (!p) return;
-  openModal(`
-    <div class="form-group"><label class="label">Product Name</label><input class="input-field" value="${p.name}"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Quantity</label><input class="input-field" type="number" value="${p.qty}"></div>
-      <div class="form-group"><label class="label">Price (₦)</label><input class="input-field" type="number" value="${p.price}"></div>
-    </div>
-    <div class="form-group"><label class="label">Supplier</label><input class="input-field" value="${p.supplier}"></div>
-    <button class="btn-accent" style="width:100%;justify-content:center;margin-top:16px;" onclick="closeModal();showToast('✅ Product updated!')">Save Changes</button>`,
-    'Edit Product', `Editing: ${p.name}`);
-}
-
-function deleteProduct(id) {
-  const p = mockProducts.find(x => x.id === id);
-  openModal(`<p style="color:var(--text-secondary);margin-bottom:20px;">Are you sure you want to delete <strong style="color:var(--text-primary);">${p.name}</strong>? This action cannot be undone.</p>
-    <div style="display:flex;gap:12px;">
-      <button class="btn-accent" style="flex:1;justify-content:center;background:var(--danger);" onclick="closeModal();showToast('🗑️ Product deleted')">Delete</button>
-      <button class="btn-outline" style="flex:1;justify-content:center;" onclick="closeModal()">Cancel</button>
-    </div>`, 'Delete Product', 'Confirm deletion');
-}
-
-// ============================================================
-// ANALYTICS
-// ============================================================
-function renderAnalytics() {
-  return `
-  <div style="margin-bottom:24px;">
-    <h2 style="font-size:20px;font-weight:700;margin-bottom:4px;">Analytics & Trends</h2>
-    <p style="color:var(--text-secondary);font-size:13px;">Deep dive into your business performance</p>
-  </div>
-
-  <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;">
-    <button class="toggle-tab active" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);padding:8px 20px;border-radius:var(--radius-sm);">7 Days</button>
-    <button class="toggle-tab" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);padding:8px 20px;border-radius:var(--radius-sm);cursor:pointer;">30 Days</button>
-    <button class="toggle-tab" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);padding:8px 20px;border-radius:var(--radius-sm);cursor:pointer;">3 Months</button>
-    <button class="toggle-tab" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);padding:8px 20px;border-radius:var(--radius-sm);cursor:pointer;">1 Year</button>
-  </div>
-
-  <div class="two-col" style="margin-bottom:20px;">
-    <div class="chart-card">
-      <div class="chart-head"><div class="chart-title">Revenue Trend</div><span class="badge badge-success">▲ 12.4%</span></div>
-      <div class="chart-wrap"><canvas id="analyticsRevChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-head"><div class="chart-title">Sales by Category</div></div>
-      <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
-    </div>
-  </div>
-  <div class="two-col">
-    <div class="chart-card">
-      <div class="chart-head"><div class="chart-title">Payment Methods</div></div>
-      <div class="chart-wrap"><canvas id="paymentChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-head"><div class="chart-title">Store Performance</div></div>
-      <div class="chart-wrap"><canvas id="storeChart"></canvas></div>
-    </div>
-  </div>`;
-}
-
-function initAnalyticsCharts() {
-  setTimeout(() => {
-    const cFg = '#5a5870', accent = '#ff5b1f';
-    const chartDefaults = (type, labels, data, label, colors) => ({
-      type,
-      data: { labels, datasets: [{ label, data, backgroundColor: colors || 'rgba(255,91,31,0.7)', borderColor: type === 'line' ? accent : undefined, fill: type === 'line', tension: 0.4, borderWidth: type === 'line' ? 2 : 0 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type !== 'line', labels: { color: '#9d9ba8', font: { size: 11 }, boxWidth: 12 } } }, scales: type !== 'pie' && type !== 'doughnut' ? { y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: cFg, font: { size: 11 } } }, x: { grid: { display: false }, ticks: { color: cFg, font: { size: 11 } } } } : {} }
-    });
-    const rev = document.getElementById('analyticsRevChart');
-    if (rev) new Chart(rev, chartDefaults('line', ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], [52000,48000,189000,75000,91000,142000,84200], 'Revenue'));
-    const cat = document.getElementById('categoryChart');
-    if (cat) new Chart(cat, { type: 'doughnut', data: { labels: ['Beverages', 'Food', 'Dairy', 'Personal Care', 'Household'], datasets: [{ data: [41, 29, 12, 9, 9], backgroundColor: ['#ff5b1f','#f59e0b','#3b82f6','#22c55e','#8b5cf6'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#9d9ba8', font: { size: 11 }, boxWidth: 12 } } } } });
-    const pm = document.getElementById('paymentChart');
-    if (pm) new Chart(pm, chartDefaults('bar', ['Cash','Bank Transfer','POS','USSD'], [42, 31, 19, 8], 'Transactions', ['rgba(255,91,31,0.8)','rgba(245,158,11,0.8)','rgba(59,130,246,0.8)','rgba(34,197,94,0.8)']));
-    const st = document.getElementById('storeChart');
-    if (st) new Chart(st, chartDefaults('bar', ['Main Branch','Ikeja Branch','Surulere'], [842000, 526500, 218200], 'Revenue (₦)', ['rgba(255,91,31,0.8)','rgba(59,130,246,0.8)','rgba(34,197,94,0.8)']));
-  }, 100);
-}
-
-// ============================================================
-// REPORTS
-// ============================================================
-function renderReports() {
-  return `
-  <div style="margin-bottom:24px;">
-    <h2 style="font-size:20px;font-weight:700;margin-bottom:4px;">Reports</h2>
-    <p style="color:var(--text-secondary);font-size:13px;">Generate and export detailed business reports</p>
-  </div>
-
-  <div class="two-col" style="margin-bottom:24px;">
-    <div class="card">
-      <div style="font-weight:700;margin-bottom:16px;">Generate Report</div>
-      <div class="form-group"><label class="label">Report Type</label>
-        <select class="input-field" id="reportType">
-          <option>Daily Report</option><option>Weekly Report</option><option>Monthly Report</option><option>Annual Report</option><option>Sales Summary</option><option>Inventory Report</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="label">From Date</label><input class="input-field" type="date" value="2025-01-01"></div>
-        <div class="form-group"><label class="label">To Date</label><input class="input-field" type="date" value="2025-01-15"></div>
-      </div>
-      <div class="form-group"><label class="label">Store</label>
-        <select class="input-field"><option>All Stores</option>${mockStores.map(s => `<option>${s.name}</option>`).join('')}</select>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
-        <button class="btn-accent" onclick="showToast('📊 Generating report...')">Generate</button>
-        <button class="btn-outline" style="padding:10px 18px;font-size:13px;display:flex;align-items:center;gap:6px;" onclick="showToast('📄 Downloading PDF...')">📄 PDF</button>
-        <button class="btn-outline" style="padding:10px 18px;font-size:13px;display:flex;align-items:center;gap:6px;" onclick="showToast('📊 Downloading CSV...')">📊 CSV</button>
-        <button class="btn-outline" style="padding:10px 18px;font-size:13px;display:flex;align-items:center;gap:6px;" onclick="showToast('📗 Downloading Excel...')">📗 Excel</button>
-      </div>
-    </div>
-    <div class="card">
-      <div style="font-weight:700;margin-bottom:16px;">Quick Stats</div>
-      ${[
-        { label: 'Total Revenue (Jan)', value: '₦2,142,600', change: '+7.8%', up: true },
-        { label: 'Total Transactions', value: '847', change: '+12.3%', up: true },
-        { label: 'Average Sale Value', value: '₦2,530', change: '-2.1%', up: false },
-        { label: 'Top Product', value: 'Indomie Noodles', change: '23% of revenue', up: true },
-      ].map(s => `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);">
-        <div style="font-size:13px;color:var(--text-secondary);">${s.label}</div>
-        <div style="text-align:right;"><div style="font-weight:700;font-size:14px;">${s.value}</div><div style="font-size:11px;color:${s.up ? 'var(--success)' : 'var(--danger)'};">${s.change}</div></div>
-      </div>`).join('')}
-    </div>
-  </div>
-
-  <div class="card">
-    <div style="font-weight:700;margin-bottom:16px;">Sample Report Preview — January 2025</div>
     <div class="table-container">
       <table>
-        <thead><tr><th>Week</th><th>Revenue</th><th>Transactions</th><th>Avg. Sale</th><th>Top Product</th><th>Growth</th></tr></thead>
+        <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Total</th><th>Method</th><th>Actions</th></tr></thead>
         <tbody>
-          <tr><td><strong>Week 1 (Jan 1–7)</strong></td><td><strong>₦489,200</strong></td><td>192</td><td>₦2,548</td><td>Indomie Noodles</td><td><span class="badge badge-success">▲ 8.2%</span></td></tr>
-          <tr><td><strong>Week 2 (Jan 8–14)</strong></td><td><strong>₦542,800</strong></td><td>218</td><td>₦2,490</td><td>Coca-Cola 1L</td><td><span class="badge badge-success">▲ 12.4%</span></td></tr>
-          <tr><td><strong>Week 3 (Jan 15–21)</strong></td><td><strong>₦501,400</strong></td><td>203</td><td>₦2,470</td><td>Indomie Noodles</td><td><span class="badge badge-danger">▼ 7.6%</span></td></tr>
-          <tr><td><strong>Week 4 (Jan 22–31)</strong></td><td><strong>₦609,200</strong></td><td>234</td><td>₦2,603</td><td>Indomie Noodles</td><td><span class="badge badge-success">▲ 21.5%</span></td></tr>
+          ${sales.map(s => `<tr>
+            <td><strong>${s.invoice_number || '#' + s.id}</strong></td>
+            <td style="color:var(--text-muted);font-size:12px;">${new Date(s.created_at).toLocaleDateString()}</td>
+            <td>${s.customer_name || 'Walk-in'}</td>
+            <td><strong>₦${(s.total || 0).toLocaleString()}</strong></td>
+            <td><span class="badge badge-info">${s.payment_method || 'Cash'}</span></td>
+            <td><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="switchSection('invoice')">Invoice</button></td>
+          </tr>`).join('')}
+          ${sales.length === 0 ? '<tr><td colspan="6" style="text-align:center;">No sales recorded yet. Click "Record New Sale" to get started.</td></tr>' : ''}
         </tbody>
       </table>
     </div>
   </div>`;
 }
 
+function openSaleModal() {
+  const products = appState.products;
+  openModal(`
+    <div class="form-row">
+      <div class="form-group"><label class="label">Product</label>
+        <select class="input-field" id="saleProduct">
+          <option value="">Select product</option>
+          ${products.map(p => `<option value="${p.id}" data-price="${p.price}">${p.name} — ₦${p.price}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="label">Quantity</label><input class="input-field" type="number" id="saleQty" min="1" value="1"></div>
+    </div>
+    <div class="form-group"><label class="label">Customer Name (Optional)</label><input class="input-field" id="saleCustomer" placeholder="Walk-in Customer"></div>
+    <div class="form-group"><label class="label">Customer Phone (Optional)</label><input class="input-field" id="salePhone" placeholder="+234..."></div>
+    <div class="form-group"><label class="label">Payment Method</label>
+      <select class="input-field" id="saleMethod">
+        <option>Cash</option><option>Bank Transfer</option><option>POS</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:20px;">
+      <button class="btn-accent" style="flex:1;justify-content:center;" onclick="createSale()">Record Sale</button>
+      <button class="btn-outline" style="flex:1;justify-content:center;" onclick="closeModal()">Cancel</button>
+    </div>`, 'Record New Sale', 'Add a new transaction to your records');
+}
+
+async function createSale() {
+  const productSelect = document.getElementById('saleProduct');
+  const productId = productSelect.value;
+  const qty = parseInt(document.getElementById('saleQty').value);
+  const customerName = document.getElementById('saleCustomer').value;
+  const customerPhone = document.getElementById('salePhone').value;
+  const method = document.getElementById('saleMethod').value;
+  
+  if (!productId) {
+    showToast('Please select a product');
+    return;
+  }
+  
+  const product = appState.products.find(p => p.id == productId);
+  if (!product) return;
+  
+  try {
+    await apiRequest('/sales/', 'POST', {
+      store_id: appState.currentStore,
+      customer_name: customerName || null,
+      customer_phone: customerPhone || null,
+      payment_method: method,
+      discount: 0,
+      items: [{
+        product_id: parseInt(productId),
+        product_name: product.name,
+        quantity: qty,
+        unit_price: product.price
+      }]
+    });
+    
+    closeModal();
+    showToast('✅ Sale recorded successfully!');
+    await loadSales();
+    await loadDashboardStats();
+    await loadProducts();
+    renderSection('sales');
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
 // ============================================================
-// AI INSIGHTS
+// INVENTORY RENDER
+// ============================================================
+function renderInventory() {
+  const products = appState.products;
+  const lowStock = products.filter(p => p.quantity <= (p.low_stock_threshold || 10)).length;
+  const outOfStock = products.filter(p => p.quantity === 0).length;
+  
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:700;">Inventory Management</h2>
+      <p style="color:var(--text-secondary);font-size:13px;">${products.length} products · ${lowStock} need attention</p>
+    </div>
+    <button class="btn-accent" onclick="openAddProductModal()">+ Add Product</button>
+  </div>
+
+  <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+    <div class="stat-card"><div class="stat-label">Total Products</div><div class="stat-value">${products.length}</div></div>
+    <div class="stat-card"><div class="stat-label">In Stock</div><div class="stat-value" style="color:var(--success);">${products.filter(p => p.quantity > (p.low_stock_threshold || 10)).length}</div></div>
+    <div class="stat-card"><div class="stat-label">Low Stock</div><div class="stat-value" style="color:var(--warning);">${lowStock}</div></div>
+    <div class="stat-card"><div class="stat-label">Out of Stock</div><div class="stat-value" style="color:var(--danger);">${outOfStock}</div></div>
+  </div>
+
+  <div class="card">
+    <div class="table-container">
+      <table>
+        <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Qty</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${products.map(p => `<tr>
+            <td><strong>${p.name}</strong></td>
+            <td style="font-size:12px;color:var(--text-muted);">${p.sku || 'N/A'}</td>
+            <td>${p.category || 'General'}</td>
+            <td><strong>${p.quantity}</strong></td>
+            <td>₦${(p.price || 0).toLocaleString()}</td>
+            <td><span class="badge ${p.quantity === 0 ? 'badge-danger' : p.quantity <= (p.low_stock_threshold || 10) ? 'badge-warning' : 'badge-success'}">${p.quantity === 0 ? 'Out of Stock' : p.quantity <= (p.low_stock_threshold || 10) ? 'Low Stock' : 'In Stock'}</span></td>
+            <td><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="editProduct(${p.id})">Edit</button></td>
+          </tr>`).join('')}
+          ${products.length === 0 ? '<tr><td colspan="7" style="text-align:center;">No products found. Click "Add Product" to get started.</td></tr>' : ''}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function openAddProductModal() {
+  openModal(`
+    <div class="form-row">
+      <div class="form-group"><label class="label">Product Name</label><input class="input-field" id="prodName" placeholder="e.g. Indomie Noodles"></div>
+      <div class="form-group"><label class="label">SKU</label><input class="input-field" id="prodSku" placeholder="e.g. IND001"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="label">Category</label><input class="input-field" id="prodCategory" placeholder="Food, Beverages, etc."></div>
+      <div class="form-group"><label class="label">Quantity</label><input class="input-field" type="number" id="prodQty" min="0" value="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="label">Selling Price (₦)</label><input class="input-field" type="number" id="prodPrice" placeholder="0.00"></div>
+      <div class="form-group"><label class="label">Low Stock Threshold</label><input class="input-field" type="number" id="prodThreshold" value="10"></div>
+    </div>
+    <button class="btn-accent" style="width:100%;justify-content:center;margin-top:16px;" onclick="createProduct()">Add Product</button>`,
+    'Add New Product', 'Add a product to your inventory');
+}
+
+async function createProduct() {
+  try {
+    await apiRequest('/inventory/', 'POST', {
+      name: document.getElementById('prodName').value,
+      sku: document.getElementById('prodSku').value,
+      category: document.getElementById('prodCategory').value,
+      quantity: parseInt(document.getElementById('prodQty').value),
+      price: parseFloat(document.getElementById('prodPrice').value),
+      low_stock_threshold: parseInt(document.getElementById('prodThreshold').value)
+    });
+    
+    closeModal();
+    showToast('✅ Product added successfully!');
+    await loadProducts();
+    renderSection('inventory');
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function editProduct(id) {
+  const product = appState.products.find(p => p.id === id);
+  if (!product) return;
+  
+  openModal(`
+    <div class="form-group"><label class="label">Product Name</label><input class="input-field" id="editName" value="${product.name}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="label">Quantity</label><input class="input-field" type="number" id="editQty" value="${product.quantity}"></div>
+      <div class="form-group"><label class="label">Price (₦)</label><input class="input-field" type="number" id="editPrice" value="${product.price}"></div>
+    </div>
+    <button class="btn-accent" style="width:100%;justify-content:center;margin-top:16px;" onclick="updateProduct(${id})">Save Changes</button>`,
+    'Edit Product', `Editing: ${product.name}`);
+}
+
+async function updateProduct(id) {
+  try {
+    await apiRequest(`/inventory/${id}`, 'PUT', {
+      name: document.getElementById('editName').value,
+      quantity: parseInt(document.getElementById('editQty').value),
+      price: parseFloat(document.getElementById('editPrice').value)
+    });
+    
+    closeModal();
+    showToast('✅ Product updated!');
+    await loadProducts();
+    renderSection('inventory');
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+// ============================================================
+// AI CHAT RENDER
 // ============================================================
 function renderAI() {
   const msgs = appState.chatMessages.length === 0 ? [{
     role: 'ai',
-    text: `Hello! I'm <strong>BizPulse AI</strong> 🤖 — your intelligent business assistant.\n\nI can analyze your sales, inventory, and performance data to give you actionable insights. Try asking me something below, or tap a suggestion!`,
+    text: `Hello! I'm <strong>BizPulse AI</strong> 🤖 — your intelligent business assistant.\n\nI can analyze your sales, inventory, and performance data to give you actionable insights. Try asking me something below.`,
     time: 'Just now'
   }] : appState.chatMessages;
-
+  
   return `
-  <!-- Future AI Integration Placeholder -->
-  <!-- TODO: Replace mock responses with OpenAI API / Llama / Mistral / DeepSeek / Gemma -->
-  <!-- Service Layer: window.AIService.query(prompt) → response -->
   <div class="chat-container">
     <div class="chat-header">
       <div class="ai-avatar">🤖</div>
       <div>
         <div class="ai-name">BizPulse AI</div>
-        <div class="ai-status">Online — Ready to help</div>
+        <div class="ai-status">Online — Connected to real data</div>
       </div>
-      <div style="margin-left:auto;font-size:12px;color:var(--text-muted);background:var(--bg-secondary);padding:4px 10px;border-radius:100px;border:1px solid var(--border);">Mock Mode</div>
     </div>
     <div class="chat-messages" id="chatMessages">
-      ${msgs.map(m => renderMessage(m)).join('')}
+      ${msgs.map(m => `<div class="msg ${m.role}">
+        <div class="msg-avatar">${m.role === 'ai' ? '🤖' : '👤'}</div>
+        <div>
+          <div class="msg-bubble">${m.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')}</div>
+          <div class="msg-time">${m.time}</div>
+        </div>
+      </div>`).join('')}
     </div>
-    <div class="chat-suggestions" id="chatSuggestions">
+    <div class="chat-suggestions">
       <div class="suggestion-chip" onclick="sendSuggestion('What products need restocking?')">📦 What needs restocking?</div>
       <div class="suggestion-chip" onclick="sendSuggestion('Which product sells the most?')">🏆 Top selling product?</div>
       <div class="suggestion-chip" onclick="sendSuggestion('Show weekly business summary')">📊 Weekly summary</div>
-      <div class="suggestion-chip" onclick="sendSuggestion('Predict inventory shortages')">🔮 Predict shortages</div>
-      <div class="suggestion-chip" onclick="sendSuggestion('Why did sales drop?')">📉 Why sales dropped?</div>
     </div>
     <div class="chat-input-area">
-      <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask anything about your business..." onkeydown="handleChatKey(event)"></textarea>
+      <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask anything about your business..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
       <button class="send-btn" onclick="sendMessage()">➤</button>
     </div>
   </div>`;
-}
-
-function renderMessage(m) {
-  return `<div class="msg ${m.role}">
-    <div class="msg-avatar">${m.role === 'ai' ? '🤖' : 'A'}</div>
-    <div>
-      <div class="msg-bubble">${m.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')}</div>
-      <div class="msg-time">${m.time}</div>
-    </div>
-  </div>`;
-}
-
-function handleChatKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
 function sendSuggestion(text) {
@@ -1943,454 +1967,65 @@ function sendSuggestion(text) {
   sendMessage();
 }
 
-function sendMessage() {
+async function sendMessage() {
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
   if (!text) return;
+  
   const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   appState.chatMessages.push({ role: 'user', text, time: now });
   input.value = '';
-  // Determine AI response
-  let aiText = `I understand you're asking about "${text}". Based on your current business data, I can see your store is performing well. For more specific insights, please try one of the suggested prompts below.`;
-  const lc = text.toLowerCase();
-  if (lc.includes('restock') || lc.includes('stock')) aiText = aiResponses['restock'];
-  else if (lc.includes('top') || lc.includes('sell') || lc.includes('most')) aiText = aiResponses['top seller'];
-  else if (lc.includes('weekly') || lc.includes('summary') || lc.includes('week')) aiText = aiResponses['weekly'];
-  else if (lc.includes('predict') || lc.includes('shortage') || lc.includes('forecast')) aiText = aiResponses['predict'];
-  else if (lc.includes('drop') || lc.includes('why') || lc.includes('decline')) aiText = aiResponses['drop'];
-
-  // Re-render
+  
   renderSection('ai');
-  // Add AI response after delay
-  setTimeout(() => {
-    appState.chatMessages.push({ role: 'ai', text: aiText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-    renderSection('ai');
-    const msgs = document.getElementById('chatMessages');
-    if (msgs) msgs.scrollTop = msgs.scrollHeight;
-  }, 800);
-
+  
+  try {
+    const data = await apiRequest('/ai/chat', 'POST', { message: text });
+    
+    if (data && data.reply) {
+      appState.chatMessages.push({ role: 'ai', text: data.reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    } else {
+      appState.chatMessages.push({ role: 'ai', text: "I'm having trouble analyzing your data right now. Please try again.", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    }
+  } catch (e) {
+    appState.chatMessages.push({ role: 'ai', text: `Error: ${e.message}. Please make sure you're logged in and try again.`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+  }
+  
+  renderSection('ai');
   const msgs = document.getElementById('chatMessages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
 }
 
 // ============================================================
-// WHATSAPP INVOICE
+// PLACEHOLDER RENDER FUNCTIONS
 // ============================================================
-function renderInvoice() {
-  return `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-    <div>
-      <h2 style="font-size:20px;font-weight:700;">WhatsApp Invoice</h2>
-      <p style="color:var(--text-secondary);font-size:13px;">Create and share professional invoices instantly</p>
-    </div>
-    <button class="btn-accent" onclick="showToast('📋 Invoice #INV-' + Math.floor(Math.random()*9000+1000) + ' created!')">+ New Invoice</button>
-  </div>
-
-  <div class="two-col">
-    <div class="card">
-      <div style="font-weight:700;margin-bottom:20px;">Invoice Details</div>
-      <div class="form-group"><label class="label">Customer Name</label><input class="input-field" id="invCustomer" value="Emeka Okafor"></div>
-      <div class="form-group"><label class="label">Customer Phone</label><input class="input-field" id="invPhone" value="+2348123456789"></div>
-      <div class="form-group"><label class="label">Invoice Number</label><input class="input-field" value="INV-007" readonly style="color:var(--text-muted);"></div>
-
-      <div style="font-weight:700;margin:20px 0 12px;">Products</div>
-      <div id="invoiceItems">
-        <div class="form-row" style="margin-bottom:10px;">
-          <div class="form-group"><label class="label">Product</label><input class="input-field" value="Indomie Noodles (Carton)"></div>
-          <div class="form-group"><label class="label">Qty × Price</label><input class="input-field" value="2 × ₦4,500"></div>
-        </div>
-        <div class="form-row" style="margin-bottom:10px;">
-          <div class="form-group"><input class="input-field" value="Coca-Cola 1L (Crate)"></div>
-          <div class="form-group"><input class="input-field" value="1 × ₦3,200"></div>
-        </div>
-      </div>
-      <button class="btn-ghost" style="margin-bottom:20px;" onclick="showToast('Row added')">+ Add Item</button>
-
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-accent" onclick="document.getElementById('invoicePreview').scrollIntoView({behavior:'smooth'})">Preview Invoice</button>
-        <button class="wa-btn" onclick="sendWhatsApp()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-          Send via WhatsApp
-        </button>
-      </div>
-    </div>
-
-    <div id="invoicePreview">
-      <div class="invoice-preview">
-        <div class="inv-head">
-          <div>
-            <div class="inv-logo">BizPulse</div>
-            <div style="font-size:12px;color:#888;margin-top:4px;">Adunola's Store — Main Branch</div>
-            <div style="font-size:12px;color:#888;">Lagos, Nigeria</div>
-          </div>
-          <div style="text-align:right;">
-            <div class="inv-title">INVOICE</div>
-            <div style="font-size:13px;color:#555;">#INV-007</div>
-            <div style="font-size:12px;color:#888;margin-top:4px;">January 15, 2025</div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
-          <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:4px;">Bill To</div><div style="font-weight:700;color:#111;">Emeka Okafor</div><div style="font-size:13px;color:#555;">+2348123456789</div></div>
-          <div style="text-align:right;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:4px;">Due Date</div><div style="font-weight:700;color:#111;">January 22, 2025</div></div>
-        </div>
-        <table>
-          <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
-          <tbody>
-            <tr><td>1</td><td>Indomie Noodles (Carton)</td><td>2</td><td>₦4,500</td><td>₦9,000</td></tr>
-            <tr><td>2</td><td>Coca-Cola 1L (Crate)</td><td>1</td><td>₦3,200</td><td>₦3,200</td></tr>
-          </tbody>
-        </table>
-        <div style="text-align:right;"><div style="font-size:13px;color:#555;margin-bottom:4px;">Subtotal: ₦12,200</div></div>
-        <div class="inv-total">Total: ₦12,200</div>
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888;text-align:center;">Thank you for your business! • Powered by BizPulse</div>
-      </div>
-    </div>
-  </div>`;
-}
-
-function sendWhatsApp() {
-  const customer = document.getElementById('invCustomer').value;
-  const phone = document.getElementById('invPhone').value.replace(/\D/g, '');
-  showToast(`📱 WhatsApp invoice sent to ${customer}!`);
-  // Future: window.open(`https://wa.me/${phone}?text=${encodeURIComponent(invoiceText)}`);
-}
+function renderAnalytics() { return '<div class="card"><p>Analytics dashboard coming soon. Your sales data is being collected.</p></div>'; }
+function renderReports() { return '<div class="card"><p>Reports are being generated from your real sales data. Check back soon for downloadable reports.</p></div>'; }
+function renderInvoice() { return '<div class="card"><p>WhatsApp invoice integration is active. Use the sales section to create and send invoices.</p></div>'; }
+function renderStores() { return `<div class="card"><h3>Your Stores</h3>${appState.stores.map(s => `<div style="padding:12px;border-bottom:1px solid var(--border);"><strong>${s.name}</strong><br>${s.type || 'Retail'}</div>`).join('')}<button class="btn-accent" style="margin-top:16px;" onclick="showToast('Store management coming soon')">+ Add Store</button></div>`; }
+function renderSubscription() { return `<div class="card"><h3>Current Plan: ${appState.currentPlan.toUpperCase()}</h3><p>Manage your subscription and billing.</p><button class="btn-outline" onclick="showToast('Upgrade options coming soon')">Upgrade Plan</button></div>`; }
+function renderProfile() { return `<div class="card"><h3>${appState.currentUser?.business_name || 'My Business'}</h3><p>Email: Logged in</p><p>Plan: ${appState.currentPlan}</p><button class="btn-outline" onclick="showToast('Profile update coming soon')">Edit Profile</button></div>`; }
+function renderSettings() { return `<div class="card"><h3>Settings</h3><p>Notification preferences, currency, and localization settings coming soon.</p></div>`; }
 
 // ============================================================
-// STORES
+// SECTION RENDERER
 // ============================================================
-function renderStores() {
-  return `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-    <div>
-      <h2 style="font-size:20px;font-weight:700;">Multi-Store Management</h2>
-      <p style="color:var(--text-secondary);font-size:13px;">${mockStores.length} stores • All active</p>
-    </div>
-    <button class="btn-accent" onclick="openAddStoreModal()">+ Add Store</button>
-  </div>
-
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px;">
-    ${mockStores.map(s => `<div class="store-card ${s.id === appState.currentStore ? 'active-store' : ''}" onclick="selectStore('${s.id}')">
-      <div class="store-avatar">${s.id === 'store1' ? '🏪' : s.id === 'store2' ? '🏬' : '🍔'}</div>
-      <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${s.name}</div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">${s.type}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div><div style="font-size:11px;color:var(--text-muted);">Revenue</div><div style="font-weight:700;font-size:16px;">${s.revenue}</div></div>
-        <div><div style="font-size:11px;color:var(--text-muted);">Products</div><div style="font-weight:700;font-size:16px;">${s.items}</div></div>
-        <span class="badge badge-success">${s.status}</span>
-      </div>
-      ${s.id === appState.currentStore ? '<div style="font-size:11px;color:var(--accent);font-weight:700;">● Currently Viewing</div>' : ''}
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn-ghost" style="flex:1;text-align:center;padding:7px;" onclick="event.stopPropagation();showToast('✏️ Edit store modal')">Edit</button>
-        <button class="btn-ghost" style="flex:1;text-align:center;padding:7px;color:var(--danger);" onclick="event.stopPropagation();confirmDeleteStore('${s.id}')">Delete</button>
-      </div>
-    </div>`).join('')}
-  </div>
-
-  <div class="chart-card">
-    <div class="chart-head"><div class="chart-title">Store Performance Comparison</div></div>
-    <div class="chart-wrap"><canvas id="storeCompChart"></canvas></div>
-  </div>
-  <script>
-    setTimeout(() => {
-      const ctx = document.getElementById('storeCompChart');
-      if (ctx && !ctx.chart) new Chart(ctx, { type: 'bar', data: { labels: ['Main Branch — Yaba', 'Ikeja Branch', 'Surulere Outlet'], datasets: [{ label: 'Revenue (₦)', data: [842000, 526500, 218200], backgroundColor: ['rgba(255,91,31,0.8)', 'rgba(59,130,246,0.8)', 'rgba(34,197,94,0.8)'], borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#5a5870', font: { size: 11 }, callback: v => '₦' + (v/1000).toFixed(0) + 'k' } }, x: { grid: { display: false }, ticks: { color: '#9d9ba8', font: { size: 12 } } } } } });
-    }, 100);
-  <\/script>`;
-}
-
-function selectStore(id) {
-  appState.currentStore = id;
-  renderSection('stores');
-  showToast('✅ Switched to ' + mockStores.find(s => s.id === id).name);
-}
-
-function openAddStoreModal() {
-  openModal(`
-    <div class="form-group"><label class="label">Store Name</label><input class="input-field" placeholder="e.g. Victoria Island Branch"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Business Type</label>
-        <select class="input-field"><option>Retail</option><option>Food & Beverages</option><option>Fashion</option><option>Other</option></select>
-      </div>
-      <div class="form-group"><label class="label">City</label><input class="input-field" placeholder="e.g. Lagos"></div>
-    </div>
-    <div class="form-group"><label class="label">Address</label><input class="input-field" placeholder="Full address"></div>
-    <button class="btn-accent" style="width:100%;justify-content:center;margin-top:16px;" onclick="closeModal();showToast('🏪 New store added!')">Add Store</button>`,
-    'Add New Store', 'Create a new branch location');
-}
-
-function confirmDeleteStore(id) {
-  const s = mockStores.find(x => x.id === id);
-  openModal(`<p style="color:var(--text-secondary);margin-bottom:20px;">Delete <strong style="color:var(--text-primary);">${s.name}</strong>? All data for this store will be removed.</p>
-    <div style="display:flex;gap:12px;">
-      <button class="btn-accent" style="flex:1;justify-content:center;background:var(--danger);" onclick="closeModal();showToast('🗑️ Store deleted')">Delete</button>
-      <button class="btn-outline" style="flex:1;justify-content:center;" onclick="closeModal()">Cancel</button>
-    </div>`, 'Delete Store', 'This action cannot be undone');
-}
-
-// ============================================================
-// SUBSCRIPTION
-// ============================================================
-function renderSubscription() {
-  const plan = appState.currentPlan;
-  const pInfo = planDetails[plan];
-  return `
-  <div style="margin-bottom:24px;">
-    <h2 style="font-size:20px;font-weight:700;margin-bottom:4px;">Subscription</h2>
-    <p style="color:var(--text-secondary);font-size:13px;">Manage your plan and billing</p>
-  </div>
-
-  <div class="card" style="margin-bottom:24px;border-color:var(--border-accent);">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
-      <div>
-        <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Current Plan</div>
-        <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:700;">${pInfo.name}</div>
-        <div style="font-size:22px;font-weight:700;color:var(--accent);margin-top:4px;">${pInfo.price}</div>
-        <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;">
-          ${pInfo.features.map(f => `<span style="background:var(--bg-input);border:1px solid var(--border);padding:4px 12px;border-radius:100px;font-size:12px;color:var(--text-secondary);">✓ ${f}</span>`).join('')}
-        </div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <button class="btn-accent" onclick="showUpgradeOptions()">Upgrade Plan</button>
-        <button class="btn-outline" style="padding:10px 18px;font-size:13px;" onclick="showToast('📧 Renewal invoice sent to your email')">Renew</button>
-        <button class="btn-ghost" style="color:var(--danger);" onclick="showToast('⚠️ Cancellation email sent')">Cancel Plan</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom:24px;">
-    <div style="font-weight:700;margin-bottom:20px;">Plan Comparison</div>
-    <div class="plan-comparison">
-      <table class="plan-table">
-        <thead>
-          <tr>
-            <th style="text-align:left;">Feature</th>
-            <th>Basic</th>
-            <th class="plan-highlight" style="color:var(--accent);">Pro ⭐</th>
-            <th>Business</th>
-          </tr>
-          <tr>
-            <th style="text-align:left;font-size:12px;color:var(--text-muted);">Price</th>
-            <th style="font-size:16px;font-weight:700;">Free</th>
-            <th class="plan-highlight" style="font-size:16px;font-weight:700;color:var(--accent);">₦2,500/mo</th>
-            <th style="font-size:16px;font-weight:700;">₦5,000/mo</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${[
-            ['Sales Tracking', 'Limited', 'Unlimited', 'Unlimited'],
-            ['Inventory', '50 products', '500 products', 'Unlimited'],
-            ['Reports', 'Monthly only', 'All types', 'All types'],
-            ['AI Insights', '✗', 'Limited', 'Full'],
-            ['WhatsApp Invoice', '✗', '✓', '✓'],
-            ['Multi-Store', '✗', '✗', '✓'],
-            ['Voice Entry', '✗', '✗', '✓'],
-            ['Ads', 'Yes', 'No', 'No'],
-            ['Support', 'Email', 'Email + Chat', 'Priority'],
-          ].map(row => `<tr>
-            <td>${row[0]}</td>
-            <td>${row[1]}</td>
-            <td class="plan-highlight">${row[2]}</td>
-            <td>${row[3]}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <div style="font-weight:700;margin-bottom:16px;">Billing History</div>
-    <div class="table-container">
-      <table>
-        <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Invoice</th></tr></thead>
-        <tbody>
-          <tr><td>Jan 1, 2025</td><td>Pro Plan — Monthly</td><td>₦2,500</td><td><span class="badge badge-success">Paid</span></td><td><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="showToast('📄 Downloading receipt...')">Download</button></td></tr>
-          <tr><td>Dec 1, 2024</td><td>Pro Plan — Monthly</td><td>₦2,500</td><td><span class="badge badge-success">Paid</span></td><td><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="showToast('📄 Downloading receipt...')">Download</button></td></tr>
-          <tr><td>Nov 1, 2024</td><td>Pro Plan — Monthly</td><td>₦2,500</td><td><span class="badge badge-success">Paid</span></td><td><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="showToast('📄 Downloading receipt...')">Download</button></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>`;
-}
-
-function showUpgradeOptions() {
-  openModal(`
-    <div style="display:flex;flex-direction:column;gap:14px;">
-      ${['pro', 'business'].map(pid => {
-        const p = planDetails[pid];
-        return `<div style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;${pid === 'business' ? 'border-color:var(--accent)' : ''}">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div><div style="font-weight:700;">${p.name}</div><div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--accent);">${p.price}</div></div>
-            <button class="btn-accent" style="padding:9px 20px;font-size:13px;" onclick="upgradeToPlan('${pid}')">Select</button>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>`, 'Upgrade Your Plan', 'Choose a plan that fits your business');
-}
-
-function upgradeToPlan(pid) {
-  appState.currentPlan = pid;
-  if (appState.currentUser) appState.currentUser.plan = pid;
-  updateUserUI();
-  closeModal();
-  showToast('🎉 Plan upgraded to ' + planDetails[pid].name + '!');
-  renderSection('subscription');
-}
-
-// ============================================================
-// PROFILE
-// ============================================================
-function renderProfile() {
-  return `
-  <div style="margin-bottom:24px;">
-    <h2 style="font-size:20px;font-weight:700;">Profile & Account</h2>
-  </div>
-
-  <div class="two-col">
-    <div>
-      <div class="card" style="margin-bottom:16px;">
-        <div style="display:flex;align-items:center;gap:20px;margin-bottom:24px;">
-          <div style="width:72px;height:72px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;flex-shrink:0;">A</div>
-          <div>
-            <div style="font-size:20px;font-weight:700;">Adunola Fashola</div>
-            <div style="font-size:13px;color:var(--text-secondary);">adunola@bizpulse.app</div>
-            <div style="margin-top:6px;"><span class="badge badge-accent">Pro Plan</span></div>
-          </div>
-        </div>
-        <div class="form-group"><label class="label">Business Name</label><input class="input-field" value="Adunola's Store"></div>
-        <div class="form-row">
-          <div class="form-group"><label class="label">Owner Name</label><input class="input-field" value="Adunola Fashola"></div>
-          <div class="form-group"><label class="label">Phone</label><input class="input-field" value="+234 812 345 6789"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="label">Country</label>
-            <select class="input-field"><option selected>🇳🇬 Nigeria</option><option>🇬🇭 Ghana</option><option>🇰🇪 Kenya</option></select>
-          </div>
-          <div class="form-group"><label class="label">Currency</label>
-            <select class="input-field"><option selected>₦ Nigerian Naira</option><option>GH₵ Ghanaian Cedi</option></select>
-          </div>
-        </div>
-        <button class="btn-accent" style="margin-top:8px;" onclick="showToast('✅ Profile updated!')">Save Changes</button>
-      </div>
-    </div>
-    <div>
-      <div class="card" style="margin-bottom:16px;">
-        <div style="font-weight:700;margin-bottom:16px;">Business Type</div>
-        <div class="form-group"><label class="label">Category</label>
-          <select class="input-field"><option selected>Retail / Shop</option><option>Food & Beverages</option><option>Fashion</option></select>
-        </div>
-        <div class="form-group"><label class="label">Address</label>
-          <input class="input-field" value="45 Broad Street, Yaba, Lagos">
-        </div>
-        <button class="btn-outline" style="width:100%;justify-content:center;margin-top:8px;" onclick="showToast('✅ Business info updated!')">Update</button>
-      </div>
-      <div class="card">
-        <div style="font-weight:700;margin-bottom:16px;">Notification Preferences</div>
-        ${[
-          ['Low stock alerts', true],
-          ['Daily sales summary', true],
-          ['Weekly reports', false],
-          ['Payment reminders', true],
-          ['Product updates', true],
-          ['Promotional emails', false],
-        ].map(([label, checked]) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
-          <div style="font-size:13px;">${label}</div>
-          <label class="switch"><input type="checkbox" ${checked ? 'checked' : ''} onchange="showToast('✅ Preference saved')"><span class="switch-slider"></span></label>
-        </div>`).join('')}
-      </div>
-    </div>
-  </div>`;
-}
-
-// ============================================================
-// SETTINGS
-// ============================================================
-function renderSettings() {
-  return `
-  <div style="margin-bottom:24px;">
-    <h2 style="font-size:20px;font-weight:700;">Settings</h2>
-  </div>
-
-  <div class="two-col">
-    <div>
-      <div class="card settings-section">
-        <div class="settings-title">🎨 Appearance</div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Theme</div><div class="settings-row-desc">Currently using dark theme</div></div>
-          <select class="input-field" style="width:140px;padding:8px 12px;" onchange="showToast('🎨 Theme will be applied')"><option selected>Dark</option><option>Light</option><option>System</option></select>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Compact Mode</div><div class="settings-row-desc">Reduce spacing in UI</div></div>
-          <label class="switch"><input type="checkbox" onchange="showToast('✅ Saved')"><span class="switch-slider"></span></label>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Animations</div><div class="settings-row-desc">Enable UI transitions</div></div>
-          <label class="switch"><input type="checkbox" checked onchange="showToast('✅ Saved')"><span class="switch-slider"></span></label>
-        </div>
-      </div>
-
-      <div class="card settings-section">
-        <div class="settings-title">🌍 Localization</div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Language</div></div>
-          <select class="input-field" style="width:160px;padding:8px 12px;"><option>English</option><option>Pidgin English</option><option>Hausa</option><option>Yoruba</option><option>Igbo</option></select>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Currency</div></div>
-          <select class="input-field" style="width:160px;padding:8px 12px;"><option>₦ NGN</option><option>GH₵ GHS</option><option>KSh KES</option><option>R ZAR</option></select>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Date Format</div></div>
-          <select class="input-field" style="width:160px;padding:8px 12px;"><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="card settings-section">
-        <div class="settings-title">🔔 Notifications</div>
-        ${[
-          ['Push Notifications', 'Get alerts on your device', true],
-          ['Low Stock Alerts', 'Notify when inventory is low', true],
-          ['Daily Summary', 'Get end-of-day summary', false],
-          ['New Sale Alert', 'Alert for each transaction', false],
-        ].map(([label, desc, checked]) => `<div class="settings-row">
-          <div><div class="settings-row-label">${label}</div><div class="settings-row-desc">${desc}</div></div>
-          <label class="switch"><input type="checkbox" ${checked ? 'checked' : ''} onchange="showToast('✅ Saved')"><span class="switch-slider"></span></label>
-        </div>`).join('')}
-      </div>
-
-      <div class="card settings-section">
-        <div class="settings-title">🔒 Security</div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Two-Factor Auth</div><div class="settings-row-desc">Add an extra layer of security</div></div>
-          <label class="switch"><input type="checkbox" onchange="showToast('🔐 2FA setup coming soon')"><span class="switch-slider"></span></label>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Change Password</div></div>
-          <button class="btn-ghost" style="padding:7px 14px;font-size:12px;" onclick="showToast('📧 Password reset email sent')">Change</button>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label" style="color:var(--danger);">Delete Account</div><div class="settings-row-desc">Permanently remove all data</div></div>
-          <button class="btn-ghost" style="padding:7px 14px;font-size:12px;color:var(--danger);" onclick="showToast('⚠️ Please contact support to delete your account')">Delete</button>
-        </div>
-      </div>
-
-      <div class="card settings-section">
-        <div class="settings-title">🔌 Integrations</div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">WhatsApp Business</div><div class="settings-row-desc">Connect for invoice sharing</div></div>
-          <button class="btn-ghost" style="padding:7px 14px;font-size:12px;background:rgba(37,211,102,0.1);color:#25D366;" onclick="showToast('📱 WhatsApp connected!')">Connect</button>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">Google Sheets</div><div class="settings-row-desc">Export data automatically</div></div>
-          <button class="btn-ghost" style="padding:7px 14px;font-size:12px;" onclick="showToast('📊 Google Sheets integration coming soon')">Connect</button>
-        </div>
-        <div class="settings-row">
-          <div><div class="settings-row-label">OpenAI API Key</div><div class="settings-row-desc">Use your own AI key for insights</div></div>
-          <button class="btn-ghost" style="padding:7px 14px;font-size:12px;" onclick="showToast('🤖 Enter your API key in the AI settings page')">Configure</button>
-        </div>
-      </div>
-    </div>
-  </div>`;
+function renderSection(section) {
+  const area = document.getElementById('contentArea');
+  
+  switch (section) {
+    case 'dashboard': area.innerHTML = renderDashboard(); initCharts(); break;
+    case 'sales': area.innerHTML = renderSales(); break;
+    case 'inventory': area.innerHTML = renderInventory(); break;
+    case 'analytics': area.innerHTML = renderAnalytics(); break;
+    case 'reports': area.innerHTML = renderReports(); break;
+    case 'ai': area.innerHTML = renderAI(); break;
+    case 'invoice': area.innerHTML = renderInvoice(); break;
+    case 'stores': area.innerHTML = renderStores(); break;
+    case 'subscription': area.innerHTML = renderSubscription(); break;
+    case 'profile': area.innerHTML = renderProfile(); break;
+    case 'settings': area.innerHTML = renderSettings(); break;
+    default: area.innerHTML = '<p>Section not found.</p>';
+  }
 }
 
 // ============================================================
@@ -2403,16 +2038,36 @@ function handleResize() {
     toggle.style.display = 'flex';
   } else {
     toggle.style.display = 'none';
-    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar')?.classList.remove('open');
   }
 }
 window.addEventListener('resize', handleResize);
+
+// ============================================================
+// CHECK FOR EXISTING SESSION
+// ============================================================
+async function checkExistingSession() {
+  const token = localStorage.getItem('token');
+  if (token) {
+    try {
+      await loadUserProfile();
+      await loadDashboardStats();
+      await loadProducts();
+      await loadSales();
+      await loadStores();
+      enterDashboard();
+    } catch (e) {
+      localStorage.removeItem('token');
+    }
+  }
+}
 
 // ============================================================
 // INIT
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
   handleResize();
+  checkExistingSession();
 });
 </script>
 </body>
