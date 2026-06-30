@@ -1498,6 +1498,27 @@ function setActivebn(section) {
   if (el) el.classList.add('active');
 }
 
+function updatePhonePrefix() {
+  const country = document.getElementById('regCountry').value;
+  const phoneInput = document.getElementById('regPhone');
+  const dialCodes = {
+    NG: '+234',
+    GH: '+233',
+    KE: '+254',
+    ZA: '+27',
+    UG: '+256',
+    TZ: '+255',
+    RW: '+250',
+    ZM: '+260'
+  };
+  const code = dialCodes[country] || '+';
+  phoneInput.placeholder = `${code}...`;
+  // Optional: auto-fill the prefix into the input itself
+  if (!phoneInput.value || /^\+\d{1,4}$/.test(phoneInput.value)) {
+    phoneInput.value = code;
+  }
+}
+   
 function updatePlanInfo() {
   const planId = document.getElementById('regPlan').value;
   const planBox = document.getElementById('planInfoBox');
